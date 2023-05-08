@@ -94,48 +94,6 @@ fn merge_sort<T: PartialOrd>(mut v: Vec<T>) -> Vec<T> {
     }
 }
 
-// O(n + log(n))
-// fn merge_sort_my_merge_impl<T: PartialOrd>(mut v: Vec<T>) -> Vec<T> {
-//     if v.len() <= 1 {
-//         return v;
-//     }
-//     let mut res = Vec::with_capacity(v.len());
-//     let second_half = v.split_off(v.len() / 2); // v now is the first half of arr
-//     let a = merge_sort(v);
-//     let b = merge_sort(second_half);
-//
-//     let mut a_it = a.into_iter();
-//     let mut b_it = b.into_iter();
-//     let mut a_peek = a_it.next();
-//     let mut b_peek = b_it.next();
-//
-//     loop {
-//         match (a_peek, b_peek) {
-//             (Some(ref a_val), Some(ref b_val)) => {
-//                 if b_val < a_val {
-//                     res.push(b_peek.take().unwrap());
-//                     b_peek = b_it.next();
-//                 } else {
-//                     res.push(a_peek.take().unwrap());
-//                     a_peek = a_it.next();
-//                 }
-//             },
-//             (Some(ref a_val), None) => {
-//                 res.push(a_peek.take().unwrap());
-//                 res.extend(a_it);
-//                 return res;
-//             },
-//             (None, Some(ref b_val)) => {
-//                 res.push(b_peek.take().unwrap());
-//                 res.extend(b_it);
-//                 return res;
-//             },
-//             (None, None) => {
-//                 return res;
-//             }
-//         }
-//     }
-// }
 
 // pivot is part of quicksort
 // moves the first element to the correct place and puts everything less
@@ -155,11 +113,12 @@ fn pivot<T: PartialOrd>(v: &mut [T]) -> usize {
     //      p   i                   first swap 6 and 1, second swap 4 and 1 (the 1 is now in the 6 spot from prior swap)
     // [2,3,1,4,6,9,10]
     //        p   i
-    for i in 1..v.len() {
-        if v[i] < v[pivot] {
+    for far in 1..v.len() {
+        if v[far] < v[pivot] {
             // move pivot forward and put this element before it
-            v.swap(pivot + 1, i);
-            v.swap(pivot + 1, pivot);
+            let near = pivot + 1;
+            v.swap(near, far);
+            v.swap(near, pivot);
             pivot += 1;
         }
     }
@@ -177,9 +136,63 @@ fn quick_sort<T: PartialOrd>(v: &mut [T]) {
     quick_sort(&mut b[1..]); // pivot is the first member of b and is already sorted
 }
 
+fn quick_sort2<T: PartialOrd>(v: &mut [T]) {
+    if v.len() <= 1 {
+        return;
+    }
+    let p = pivot2(v);
+    let (a, b) = v.split_at_mut(p);
+    quick_sort2(a);
+    quick_sort2(&mut b[1..]);
+}
+
+// this version of pivot picks a random element from the array to act as the
+// initial pivot
+fn pivot2<T: PartialOrd>(v: &mut [T]) -> usize {
+    let mut p = b_rand::rand(v.len());
+    v.swap(p, 0);
+    p = 0;
+    for i in 1..v.len() {
+        if v[i] < v[p] {
+            // move pivot forward and put this element before it
+            v.swap(p + 1, i);
+            v.swap(p + 1, p);
+            p += 1;
+        }
+    }
+    p
+}
+struct RawSend<T>(*mut [T]);
+
+unsafe impl<T> Send for RawSend<T> {}
+
+
+fn threaded_quick_sort<T: 'static + PartialOrd + Send>(v: &mut [T]) {
+    if v.len() <= 1 {
+        return;
+    }
+    let p = pivot2(v);
+    let (a, b) = v.split_at_mut(p);
+
+    let raw_a: *mut [T] = a as *mut [T];
+    let raw_s = RawSend(raw_a);
+    unsafe {
+        let handle = std::thread::spawn(move || {
+            // explicitly move raw_s into the closure otherwise we just move the
+            // contents of the struct when we access below
+            let raw_s = raw_s;
+            threaded_quick_sort(&mut *raw_s.0);
+        });
+        threaded_quick_sort(&mut b[1..]);
+
+        handle.join().ok();
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
-    use crate::{bubble_sort, bubble_sort_optimized, merge_sort, pivot, quick_sort};
+    use crate::{bubble_sort, bubble_sort_optimized, merge_sort, pivot, quick_sort, quick_sort2, threaded_quick_sort};
 
     #[test]
     fn test_bubble_sort() {
@@ -216,6 +229,22 @@ mod tests {
         let mut v = vec![4, 6, 1, 8, 11, 13, 2, 2, 101, -1000333];
         let sorted = vec![-1000333, 1, 2, 2, 4, 6, 8, 11, 13, 101];
         quick_sort(&mut v);
+        assert_eq!(v, sorted)
+    }
+
+    #[test]
+    fn test_quick_sort2() {
+        let mut v = vec![4, 6, 1, 8, 11, 13, 2, 2, 101, -1000333];
+        let sorted = vec![-1000333, 1, 2, 2, 4, 6, 8, 11, 13, 101];
+        quick_sort2(&mut v);
+        assert_eq!(v, sorted)
+    }
+
+    #[test]
+    fn test_threaded_quick_sort() {
+        let mut v = vec![4, 6, 1, 8, 11, 13, 2, 2, 101, -1000333];
+        let sorted = vec![-1000333, 1, 2, 2, 4, 6, 8, 11, 13, 101];
+        threaded_quick_sort(&mut v);
         assert_eq!(v, sorted)
     }
 }
