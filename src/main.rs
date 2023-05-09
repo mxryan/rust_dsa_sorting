@@ -133,7 +133,10 @@ fn quick_sort<T: PartialOrd>(v: &mut [T]) {
     let p = pivot(v);
     let (a, b) = v.split_at_mut(p);
     quick_sort(a);
-    quick_sort(&mut b[1..]); // pivot is the first member of b and is already sorted
+    // pivot is the first member of b and is already sorted
+    // also i think if we didn't exclude the pivot, then it could move around
+    // again but its already in its proper place. might even overflow the stack?
+    quick_sort(&mut b[1..]);
 }
 
 fn quick_sort2<T: PartialOrd>(v: &mut [T]) {
@@ -147,7 +150,9 @@ fn quick_sort2<T: PartialOrd>(v: &mut [T]) {
 }
 
 // this version of pivot picks a random element from the array to act as the
-// initial pivot
+// initial pivot. picking a random pivot minimizes the chance of encountering
+// worst case scenario O(n^2). picking the first element as pivot in a nearly
+// sorted array can yield this worst case scenario.
 fn pivot2<T: PartialOrd>(v: &mut [T]) -> usize {
     let mut p = b_rand::rand(v.len());
     v.swap(p, 0);
@@ -166,7 +171,7 @@ struct RawSend<T>(*mut [T]);
 
 unsafe impl<T> Send for RawSend<T> {}
 
-
+// this will try to spawn an obscene number of threads for a big vec
 fn threaded_quick_sort<T: 'static + PartialOrd + Send>(v: &mut [T]) {
     if v.len() <= 1 {
         return;
@@ -189,10 +194,23 @@ fn threaded_quick_sort<T: 'static + PartialOrd + Send>(v: &mut [T]) {
     }
 }
 
+fn quick_sort_rayon<T:Send + PartialOrd>(v: &mut [T]) {
+    if v.len() <= 1 {
+        return;
+    }
+    let p = pivot2(v);
+    let (a,b) = v.split_at_mut(p);
+
+    // put 2nd func on a queue then start func1
+    // if another thread is ready then it will execute func2
+    // will work recursively
+    rayon::join(||quick_sort_rayon(a), ||quick_sort_rayon(&mut b[1..]));
+}
+
 
 #[cfg(test)]
 mod tests {
-    use crate::{bubble_sort, bubble_sort_optimized, merge_sort, pivot, quick_sort, quick_sort2, threaded_quick_sort};
+    use crate::{bubble_sort, bubble_sort_optimized, merge_sort, pivot, quick_sort, quick_sort2, quick_sort_rayon, threaded_quick_sort};
 
     #[test]
     fn test_bubble_sort() {
@@ -245,6 +263,15 @@ mod tests {
         let mut v = vec![4, 6, 1, 8, 11, 13, 2, 2, 101, -1000333];
         let sorted = vec![-1000333, 1, 2, 2, 4, 6, 8, 11, 13, 101];
         threaded_quick_sort(&mut v);
+        assert_eq!(v, sorted)
+    }
+
+
+    #[test]
+    fn test_rayon_quick_sort() {
+        let mut v = vec![4, 6, 1, 8, 11, 13, 2, 2, 101, -1000333];
+        let sorted = vec![-1000333, 1, 2, 2, 4, 6, 8, 11, 13, 101];
+        quick_sort_rayon(&mut v);
         assert_eq!(v, sorted)
     }
 }
