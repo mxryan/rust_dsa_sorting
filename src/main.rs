@@ -207,10 +207,47 @@ fn quick_sort_rayon<T:Send + PartialOrd>(v: &mut [T]) {
     rayon::join(||quick_sort_rayon(a), ||quick_sort_rayon(&mut b[1..]));
 }
 
+// random fibonacci facts:
+
+// fib(0) = 1 is the "combinatorial" definition (f_n)
+// fib(0) = 0 is the "classical" definition (F_n)
+
+// Program with fib(0) = 1; spits out fib(4) = 5
+// 1 1 2 3 5
+
+// Program with fib(0) = 0; spits out fib(4) = 3
+// 0 1 1 2 3
+
+
+// this is a "combinatorial" impl
+fn fibonacci(n:i32) -> i32 {
+    if n <= 1 {
+        return 1;
+    }
+
+    fibonacci(n -1) + fibonacci(n -2)
+}
+
+// this is also a "combinatorial" definition because the base case of n=0
+// returns (1,0) with 1 being the actual answer and 0 being n-1 and really just
+// used as storage for one of the arms in the fibonacci tree of calls so that it
+// doesnt need to be recalculated again and again
+fn fibonacci_dynamic(n:i32) -> (i32, i32) {
+    if n == 0 {
+        return (1, 0);
+    }
+    // a is fib(n-1) and b is fib(n-2)
+    let (a, b) = fibonacci_dynamic(n - 1);
+
+    // return the answer of (fib(n), fib(n-1)) so that fib(n-1) doesn't need to
+    // be recalculated like it would in the previous fib impl
+    (a+b, a)
+}
+
 
 #[cfg(test)]
 mod tests {
-    use crate::{bubble_sort, bubble_sort_optimized, merge_sort, pivot, quick_sort, quick_sort2, quick_sort_rayon, threaded_quick_sort};
+    use crate::{bubble_sort, bubble_sort_optimized, fibonacci_dynamic, merge_sort, pivot, quick_sort, quick_sort2, quick_sort_rayon, threaded_quick_sort};
 
     #[test]
     fn test_bubble_sort() {
@@ -274,4 +311,12 @@ mod tests {
         quick_sort_rayon(&mut v);
         assert_eq!(v, sorted)
     }
+
+    #[test]
+    fn test_fib() {
+        let result = fibonacci_dynamic(2);
+        assert_eq!(result, (9, 8));
+    }
 }
+
+
