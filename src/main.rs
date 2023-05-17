@@ -314,8 +314,8 @@ mod tests {
 
     #[test]
     fn test_fib() {
-        let result = fibonacci_dynamic(2);
-        assert_eq!(result, (9, 8));
+        let result = fibonacci_dynamic(15);
+        assert_eq!(result, (987, 610));
     }
 }
 
